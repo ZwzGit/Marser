@@ -59,7 +59,7 @@ $di->setShared('logger', function () use ($di) {
 /**
  * DI注入api配置
  */
-$di->set('apiConfig', function () use ($di) {
+$di->setShared('apiConfig', function () use ($di) {
     $config = \marser\app\core\Config::getInstance('api');
     $config -> set_run_time(RUNTIME);
     return $config;
@@ -68,7 +68,7 @@ $di->set('apiConfig', function () use ($di) {
 /**
  * DI注入system配置
  */
-$di->set('systemConfig', function () use ($di) {
+$di->setShared('systemConfig', function () use ($di) {
     $config = \marser\app\core\Config::getInstance('system');
     $config -> set_run_time(RUNTIME);
     return $config;
