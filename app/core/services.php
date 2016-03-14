@@ -10,6 +10,7 @@ use Phalcon\DI\FactoryDefault,
     Phalcon\Mvc\View,
     Phalcon\Mvc\Url as UrlResolver,
     Phalcon\Db\Adapter\Pdo\Mysql as DbAdapter,
+    Phalcon\Db\Profiler as DbProfiler,
     Phalcon\Mvc\View\Engine\Volt as VoltEngine;
 
 $di = new FactoryDefault();
@@ -95,29 +96,42 @@ $di -> set('url', function(){
  * DI注入DB配置
  */
 $di->set('db', function () use($di) {
-    $dbconfig = json_decode(get_cfg_var("hitao.cps.mysql"), true);
+    $dbconfig = json_decode(get_cfg_var("marser.mysql"), true);
     if (!is_array($dbconfig) || count($dbconfig)==0) {
         throw new \Exception("the database config is error");
     }
 
-    if(RUNTIME != 'pro') {
-        /*记录底层SQL日志*/
+    if (RUNTIME != 'pro') {
         $eventsManager = new \Phalcon\Events\Manager();
-        $logger = \marser\app\core\PhalBaseLogger::getInstance();
-        $eventsManager->attach('db', function ($event, $connection) use ($logger) {
-            if ($event->getType() == 'beforeQuery') {
-                $logger->write_log($connection->getSQLStatement(), 'error');
+        // 分析底层sql性能，并记录日志
+        $profiler = new DbProfiler();
+        $eventsManager -> attach('db', function ($event, $connection) use ($profiler) {
+            if($event -> getType() == 'beforeQuery'){
+                //在sql发送到数据库前启动分析
+                $profiler -> startProfile($connection -> getSQLStatement());
+            }
+            if($event -> getType() == 'afterQuery'){
+                //在sql执行完毕后停止分析
+                $profiler -> stopProfile();
+                //获取分析结果
+                $profile = $profiler -> getLastProfile();
+                $sql = $profile->getSQLStatement();
+                $startTime = $profile->getInitialTime();
+                $endTime = $profile->getFinalTime();
+                $executeTime = $profile->getTotalElapsedSeconds();
+                //日志记录
+                $logger = \marser\app\core\PhalBaseLogger::getInstance();
+                $logger -> debug_log("{$sql}|startTime:{$startTime}|endTime:{$endTime}|executeTime:{$executeTime}");
             }
         });
-        /*记录底层SQL日志*/
     }
 
     $connection = new \Phalcon\Db\Adapter\Pdo\Mysql(array(
-            "host" => $dbconfig['host'], "port" => $dbconfig['port'],
-            "username" => $dbconfig['username'],
-            "password" => $dbconfig['password'],
-            "dbname" => $dbconfig['dbname'],
-            "charset" => $dbconfig['charset'])
+        "host" => $dbconfig['host'], "port" => $dbconfig['port'],
+        "username" => $dbconfig['username'],
+        "password" => $dbconfig['password'],
+        "dbname" => $dbconfig['dbname'],
+        "charset" => $dbconfig['charset'])
     );
 
     if(RUNTIME != 'pro') {
